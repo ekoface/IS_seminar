@@ -67,11 +67,14 @@ class Reviewer:
         bool
             True if the paper was successfully assigned, False otherwise.
         """
+        print("ok")
         if self.can_review():
             self.current_load += 1
+            print("changed")
             return True
         return False
-
+    def remove_paper(self):
+        self.current_load -= 1
     def is_author(self, paper_id):
         """
         Checks if the reviewer is an author of a given paper.
@@ -166,7 +169,7 @@ class Paper:
         """
         return len(self.assigned_reviewers) >= self.min_reviews
 
-    def add_reviewer(self, reviewer):
+    def add_reviewer(self, idx):
         """
         Assigns a new reviewer to the paper if the maximum review limit has not been reached.
 
@@ -180,13 +183,10 @@ class Paper:
         bool
             True if the reviewer was successfully assigned, False otherwise.
         """
-        if len(self.assigned_reviewers) < self.max_reviews:
-            self.assigned_reviewers.append(reviewer)
-            self.current_reviews += 1  # Increment the count of reviews
-            return True
-        return False
+        self.assigned_reviewers[idx] = 1
+        self.current_reviews += 1
 
-    def remove_reviewer(self, reviewer):
+    def remove_reviewer(self, idx):
         """
         Removes an assigned reviewer from the paper if they are currently assigned.
 
@@ -200,12 +200,10 @@ class Paper:
         bool
             True if the reviewer was successfully removed, False otherwise.
         """
-        if reviewer in self.assigned_reviewers:
-            self.assigned_reviewers.remove(reviewer)
-            self.current_reviews -= 1  # Decrement the count of reviews
-            return True
-        return False
-
+        self.assigned_reviewers[idx] = 0
+        self.current_reviews -= 1
+    def is_friend(self, reviewer_id):
+        pass
     def print(self):
         """
         Prints the details of the paper.
@@ -220,8 +218,8 @@ class Paper:
 class Individual:
     def __init__(self, table,reviewers,papers,):
         self.table = table
-        self.reviewers = reviewers
-        self.papers = papers
+        self.reviewers = []
+        self.papers = []
 
     def print(self):
         for reviewer in self.reviewers:
@@ -238,6 +236,35 @@ class Individual:
             paper = example[:,idx]
             current_paper = Paper(id=idx, min_reviews=3, max_reviews=5 ,assigned_reviewers=paper)
             self.papers.append(current_paper)
+
+    def valid_mutations(self,table,position,value,data):
+        #have to check if the mutation is valid if it has changed in T[0][0] then only change if the reviewer one has capacity and the paper has not reached max reviews else, return false Else true
+        # have to check the reviewer and the position.
+        reviewer,paper = position
+        #self.print()
+        if value == 1:
+            if self.reviewers[reviewer].can_review() and self.papers[paper].current_reviews < self.papers[paper].max_reviews:
+                current_reviewers = self.papers[paper].assigned_reviewers
+                    # Check if the new reviewer is friends with any of the current reviewers
+                for current_reviewer in current_reviewers:
+                    if data['friendships'][reviewer][current_reviewer] == 1:
+                        print("are friends")
+                        print(data['friendships'])
+                        return False
+
+                self.reviewers[reviewer].assign_paper()
+                self.papers[paper].add_reviewer(reviewer)
+
+                return True
+            else:
+                return False
+        else:
+            if self.papers[paper].current_reviews - 1 >= self.papers[paper].min_reviews:
+                self.reviewers[reviewer].remove_paper()
+                self.papers[paper].remove_reviewer(reviewer)
+                return True
+            else: 
+                return False
 
     def fitness_function(self,data):
         # get friends: 
@@ -293,10 +320,11 @@ class Genetic_Algorithm:
     def print(self):
         for individual in self.individuals:
             individual.print()
-        print(self.population)
 
-  
-
+    def mutatuion_step(self,individual,position,value,data):
+        #individual.print()
+        can_do = individual.valid_mutations(individual.table,position,value,data)
+        return can_do
 
     def crossover(self, parent1, parent2):
         """
@@ -403,10 +431,26 @@ with open('./datasets/easy_dataset_1.json', 'r') as file:
     data = json.load(file)
 
 assignment_system = Genetic_Algorithm(data)
-best_assignment,best_fitness_score= assignment_system.genetic_algorithm(iterations=100, population_size=100)
+population = [
+            np.random.randint(0, 2, (assignment_system.reviewers, assignment_system.papers))
+            for _ in range(1)
+        ]
+print(population)
+assignment_system.intialize_reviewers_papers(population)
+#assignment_system.print()
+value = assignment_system.individuals[0].table[2][0] 
+if value == 1: value = 0
+else: value = 1
+print("value",value)
+print("valid_mutations", assignment_system.mutatuion_step(assignment_system.individuals[0],(2,0),value,data))
+assignment_system.individuals[0].print()
+#assignment_system.print()
 
-print("Best Assignment:\n", best_assignment.table)
-print("Best Fitness Score:", best_fitness_score)
+#best_assignment,best_fitness_score= assignment_system.genetic_algorithm(iterations=100, population_size=100)
+
+#print("Best Assignment:\n", best_assignment.table)
+#print("Best Fitness Score:", best_fitness_score)
+
 
 '''
 reviewers = [
