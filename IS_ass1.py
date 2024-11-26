@@ -3,51 +3,45 @@ import pygad
 import random
 import json
 
+def fitness_func(solution):
+    preference_score = np.sum(solution * P.flatten())
 
-# Define the fitness function
-def fitness_func(solution, solution_idx):
-    total_score = 0
-    num_reviewers, num_papers = conference_data.preference_matrix.shape
+    penalty = 0
+    penalty += np.sum(solution * A.flatten())
+    reshaped_sol = solution.reshape((num_reviewers, num_papers))
 
-    for reviewer in range(num_reviewers):
-        for paper in range(num_papers):
-            if solution[reviewer][paper] == 1:
-                total_score += conference_data.preference_matrix[reviewer][paper]
-                if conference_data.authorship_constraints[reviewer][paper] == 1:
-                    total_score -= 10  # Penalize authorship constraint violation
-                for friend in range(num_reviewers):
-                    if conference_data.friendship_matrix[reviewer][friend] == 1 and solution[friend][paper] == 1:
-                        total_score -= 5  # Penalize friendship constraint violation
 
-    return total_score
+    #penalty for exceeding reviewer capacity, not meeting min reviews per paper, exceeding max reviews per paper
+    per_reviewer = np.sum(reshaped_sol, axis=1)
+    per_paper = np.sum(reshaped_sol, axis=0)
+    penalty += np.sum(per_paper < min_reviews_per_paper)
+    penalty += np.sum(per_paper > max_reviews_per_paper)
+    penalty += np.sum(per_reviewer > reviewer_capacity)
+
+    # how many papers have reviewers in common
+    co_review_matrix = np.dot(reshaped_sol, reshaped_sol.T)
+    friend_review_counts = F * co_review_matrix
+    penalty = np.sum(friend_review_counts) // 2
+    
+    #how many friends reviewed papers that their friends authored
+    authored_papers_by_friends = np.dot(F, A)
+    penalty_matrix = reshaped_sol * authored_papers_by_friends
+    penalty += np.sum(penalty_matrix)
+
+
+    return preference_score - penalty
 
 
 def initial_population(num_reviewers, num_papers, population_size):
-    population = []
-    for _ in range(population_size):
-        individual = np.zeros((num_reviewers, num_papers), dtype=int)
-        for paper in range(num_papers):
-            reviewers = random.sample(range(num_reviewers), 2)  # Assign 2 reviewers per paper
-            for reviewer in reviewers:
-                individual[reviewer][paper] = 1
-        population.append(individual.flatten())
+    #to do
     return population
 
-# Define the crossover function
 def crossover_func(parents, offspring_size, ga_instance):
-    offspring = []
-    for k in range(offspring_size[0]):
-        parent1_idx = k % parents.shape[0]
-        parent2_idx = (k + 1) % parents.shape[0]
-        crossover_point = np.random.randint(0, parents.shape[1])
-        offspring.append(np.concatenate((parents[parent1_idx, :crossover_point], parents[parent2_idx, crossover_point:])))
-    return np.array(offspring)
+    #to do
+    return offspring
 
-# Define the mutation function
 def mutation_func(offspring, ga_instance):
-    for idx in range(offspring.shape[0]):
-        mutation_point = np.random.randint(0, offspring.shape[1])
-        offspring[idx, mutation_point] = 1 - offspring[idx, mutation_point]
+    #to do
     return offspring
 
 
@@ -64,9 +58,9 @@ reviewer_capacity = data['reviewer_capacity']
 min_reviews_per_paper = data['min_reviews_per_paper']
 max_reviews_per_paper = data['max_reviews_per_paper']
 
-P = np.array(data['preferences'])
-F = np.array(data['friendships'])
-A = np.array(data['authorship'])
+P = np.array(data['preferences']).flatten()
+F = np.array(data['friendships']).flatten()
+A = np.array(data['authorship']).flatten()
 
 initial_pop = initial_population(num_reviewers, num_papers, population_size)
 
