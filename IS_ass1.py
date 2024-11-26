@@ -8,8 +8,8 @@ def fitness_func(solution):
 
     penalty = 0
     penalty += np.sum(solution * A.flatten())
-    reshaped_sol = solution.reshape((num_reviewers, num_papers))
 
+    reshaped_sol = solution.reshape((num_reviewers, num_papers))
 
     #penalty for exceeding reviewer capacity, not meeting min reviews per paper, exceeding max reviews per paper
     per_reviewer = np.sum(reshaped_sol, axis=1)
@@ -18,7 +18,7 @@ def fitness_func(solution):
     penalty += np.sum(per_paper > max_reviews_per_paper)
     penalty += np.sum(per_reviewer > reviewer_capacity)
 
-    # how many papers have reviewers in common
+    # how many papers have reviewers that are friends
     co_review_matrix = np.dot(reshaped_sol, reshaped_sol.T)
     friend_review_counts = F * co_review_matrix
     penalty = np.sum(friend_review_counts) // 2
@@ -33,19 +33,19 @@ def fitness_func(solution):
 
 
 def initial_population(num_reviewers, num_papers, population_size):
-    #to do
+    population = np.random.Generator(0, 2, size=(population_size, num_reviewers * num_papers))
     return population
 
-def crossover_func(parents, offspring_size, ga_instance):
-    #to do
-    return offspring
+# def crossover_func(parents, offspring_size, ga_instance):
+#     #to do
+#     return offspring
 
-def mutation_func(offspring, ga_instance):
-    #to do
-    return offspring
+# def mutation_func(offspring, ga_instance):
+#     #to do
+#     return offspring
 
 
-with open('easy_dataset_1.json', 'r') as file:
+with open('datasets/easy_dataset_1.json', 'r') as file:
     data = json.load(file)
 
 num_generations = 100
@@ -58,24 +58,28 @@ reviewer_capacity = data['reviewer_capacity']
 min_reviews_per_paper = data['min_reviews_per_paper']
 max_reviews_per_paper = data['max_reviews_per_paper']
 
-P = np.array(data['preferences']).flatten()
-F = np.array(data['friendships']).flatten()
-A = np.array(data['authorship']).flatten()
+P = np.array(data['preferences'])
+F = np.array(data['friendships'])
+A = np.array(data['authorship'])
 
 initial_pop = initial_population(num_reviewers, num_papers, population_size)
 
-ga_instance = pygad.GA(num_generations=num_generations,
-                       num_parents_mating=num_parents_mating,
-                       fitness_func=fitness_func,
-                       sol_per_pop=population_size,
-                       num_genes=num_reviewers * num_papers,
-                       initial_population=initial_pop,
-                       crossover_type=crossover_func,
-                       mutation_type=mutation_func,
-                       mutation_percent_genes=5)
+rez = fitness_func(initial_pop[0])
+print(rez)
 
-ga_instance.run()
+# ga_instance = pygad.GA(num_generations=num_generations,
+#                        num_parents_mating=num_parents_mating,
+#                        fitness_func=fitness_func,
+#                        sol_per_pop=population_size,
+#                        num_genes=num_reviewers * num_papers,
+#                        initial_population=initial_pop,
+#                        crossover_type=crossover_func,
+#                        mutation_type=mutation_func,
+#                        mutation_percent_genes=5)
 
-solution, solution_fitness, solution_idx = ga_instance.best_solution()
-print("Best solution:", solution.reshape((num_reviewers, num_papers)))
-print("Best solution fitness:", solution_fitness)
+# ga_instance.run()
+
+# solution, solution_fitness = ga_instance.best_solution()
+# print("Best solution:", solution.reshape((num_reviewers, num_papers)))
+# print("Best solution fitness:", solution_fitness)
+
