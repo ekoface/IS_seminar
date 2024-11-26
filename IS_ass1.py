@@ -28,12 +28,11 @@ def fitness_func(solution):
     penalty_matrix = reshaped_sol * authored_papers_by_friends
     penalty += np.sum(penalty_matrix)
 
-
     return preference_score - penalty
 
 
 def initial_population(num_reviewers, num_papers, population_size):
-    population = np.random.Generator(0, 2, size=(population_size, num_reviewers * num_papers))
+    population = np.random.randint(0, 2, size=(population_size, num_reviewers * num_papers))
     return population
 
 # def crossover_func(parents, offspring_size, ga_instance):
@@ -63,6 +62,7 @@ F = np.array(data['friendships'])
 A = np.array(data['authorship'])
 
 initial_pop = initial_population(num_reviewers, num_papers, population_size)
+print(initial_pop)
 
 rez = fitness_func(initial_pop[0])
 print(rez)
