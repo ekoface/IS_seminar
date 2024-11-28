@@ -54,105 +54,127 @@ def solution_is_valid(solution,get_sum=True,print_values=False, return_matrix = 
         return (penalty_authorship + penalty_min_reviews + penalty_max_reviews + penalty_reviewer_capacity + penalty_friends)
     
 
-def brute_force_find_valid_solution(num_reviewers, num_papers):
-    # Generate the initial solution matrix with all 0s
-    solution_matrix = np.zeros((num_reviewers, num_papers), dtype=int)
+def fitness_func_prefence(ga_instance, solution, solution_idx):
+    preference_score = np.sum(solution * P.flatten())
+    return preference_score
 
-    # Total number of entries in the matrix
-    total_entries = num_reviewers * num_papers
 
-    # Iterate through all possible combinations of 0s and 1s
-    for i in range(2**total_entries):
-        # Convert the current number to binary and pad with zeros
-        binary_representation = bin(i)[2:].zfill(total_entries)
-        
-        # Fill the solution matrix with the current combination of 0s and 1s
-        for idx, bit in enumerate(binary_representation):
-            row = idx // num_papers
-            col = idx % num_papers
-            solution_matrix[row, col] = int(bit)
-        
-        # Check if the current solution is valid
-        if (solution_is_valid(solution_matrix,get_sum=True) == 0):
-            return solution_matrix
+def create_fitness_function_basic(fitness_penalty):
+    def fitness_func_basic(ga_instance, solution, solution_idx):
+        preference_score = np.sum(solution * P.flatten())
+        penalty = 0
+        penalty += np.sum(solution * A.flatten()) * fitness_penalty["authorship"]
+        reshaped_sol = solution.reshape((num_reviewers, num_papers))
+        per_reviewer = np.sum(reshaped_sol, axis=1)
+        per_paper = np.sum(reshaped_sol, axis=0)
+        penalty += np.sum(per_paper < min_reviews_per_paper) * fitness_penalty["min_reviews"]
+        penalty += np.sum(per_paper > max_reviews_per_paper) * fitness_penalty["max_reviews"]
+        penalty += np.sum(per_reviewer > reviewer_capacity) * fitness_penalty["reviewer_capacity"]
+        co_review_matrix = np.dot(reshaped_sol, reshaped_sol.T)
+        friend_review_counts = F * co_review_matrix
+        penalty += np.sum(friend_review_counts) // 2 * fitness_penalty["friends"]
 
-    # Return None if no valid solution is found
-    return None
+        return preference_score - penalty
+    return fitness_func_basic
+    
 
+#added constraints for reviewer who are friends with authors
 def create_fitness_function(fitnes_penalty):
     def fitness_func(ga_instance, solution, solution_idx):
         preference_score = np.sum(solution * P.flatten())
-        #print(preference_score)
 
         penalty = 0
         penalty += np.sum(solution * A.flatten()) * fitnes_penalty["authorship"]
-        print(penalty)
-        
-        reshaped_sol = solution.reshape((num_reviewers, num_papers))
-        #print(reshaped_sol)
 
+        reshaped_sol = solution.reshape((num_reviewers, num_papers))
         #penalty for exceeding reviewer capacity, not meeting min reviews per paper, exceeding max reviews per paper
         per_reviewer = np.sum(reshaped_sol, axis=1)
         per_paper = np.sum(reshaped_sol, axis=0)
 
-        #to do bolj kot je napacno vecji je penalty
-        #penalty += np.sum(per_paper < min_reviews_per_paper) * fitnes_penalty["min_reviews"]
-        #print(penalty)
-        #penalty += np.sum(per_paper > max_reviews_per_paper) * fitnes_penalty["max_reviews"]
-        #print(penalty)
-        #penalty += np.sum(per_reviewer > reviewer_capacity) * fitnes_penalty["reviewer_capacity"]
-        #print(penalty)
-       # #print("autorship", (per_reviewer * A))
-       # print("per_reviewer", per_reviewer) 
-        #print(reshaped_sol)
         penalty += (np.maximum(0, per_paper - max_reviews_per_paper) *fitnes_penalty["max_reviews"]).sum()
-        penalty += (np.maximum(0, min_reviews_per_paper - per_paper) *fitnes_penalty["min_reviews"]).sum() **4
-        penalty += (np.maximum(0, per_reviewer - reviewer_capacity) * fitnes_penalty["reviewer_capacity"]).sum() **2
-        
-        #var = np.maximum(0, per_reviewer - reviewer_capacity).sum() **2
-        
-        #print("var", var)
+        penalty += (np.maximum(0, min_reviews_per_paper - per_paper) *fitnes_penalty["min_reviews"]).sum() 
+        penalty += (np.maximum(0, per_reviewer - reviewer_capacity) * fitnes_penalty["reviewer_capacity"]).sum() 
 
         # how many papers have reviewers that are friends
         co_review_matrix = np.dot(reshaped_sol, reshaped_sol.T)
         friend_review_counts = F * co_review_matrix 
         penalty += np.sum(friend_review_counts) // 2 * fitnes_penalty["friends"]
-        #print(penalty)
 
         #how many friends reviewed papers that their friends authored
-        #authored_papers_by_friends = np.dot(F, A)
-        #penalty_matrix = reshaped_sol * authored_papers_by_friends
-        #penalty += np.sum(penalty_matrix) * fitnes_penalty["friends"]
-        #print(penalty)
-        #return  preference_score - penalty
-        return  - penalty
+        authored_papers_by_friends = np.dot(F, A)
+        penalty_matrix = reshaped_sol * authored_papers_by_friends
+        penalty += np.sum(penalty_matrix) * fitnes_penalty["friends"]
+        
+
+        return  preference_score - penalty
     return fitness_func
 
-def custom_mutation(offspring, number_mutatuios=3):
-    initial_vector_constrains = solution_is_valid(offspring, get_sum=False,print_values=False, return_matrix=True)
-    #print(initial_vector_constrains)
-    constraint_vector = np.array([1 if val == 0 else 0 for val in initial_vector_constrains])
-    #print(constraint_vector)
-    #print( offspring)
-    while number_mutatuios > 0:
-        idx = 0
-        gene_idx = np.random.randint(0, offspring.shape[1])
-        # Perform mutation
-       # print("gene_idx", gene_idx)
-        offspring[idx, gene_idx] = 1 - offspring[idx, gene_idx]
+def custom_crossover(parents, offspring_size, ga_instance):
+    offspring = np.zeros(offspring_size)
+    for k in range(offspring_size[0]):
+        parent1_idx = k % parents.shape[0]
+        parent2_idx = (k + 1) % parents.shape[0]
+        parent1 = parents[parent1_idx]
+        parent2 = parents[parent2_idx]
+        parent1 = parent1.flatten()
+        parent2 = parent2.flatten()
+        offspring[k] = parent1
+        crossover_point = np.random.randint(0, parent1.shape[0])
+        offspring[k, crossover_point:] = parent2[crossover_point:]
+    return offspring
+def custom_mutation(offspring, ga_instance):
+    number_tries = 7
+    check_valid = random.randint(0, 2) == 1
+    for idx in range(offspring.shape[0]):
+        initial_vector_constrains = solution_is_valid(offspring[idx], get_sum=False, print_values=False, return_matrix=True)
+        constraint_vector = np.array([1 if val == 0 else 0 for val in initial_vector_constrains])
         
-        # Check if the mutated solution meets the constraints
-        new_constraint_vector = solution_is_valid(offspring, get_sum=False, print_values=False, return_matrix=True)
-        #print("new_constraint_vector", new_constraint_vector)
-        if np.all(new_constraint_vector[constraint_vector == 1] == 0):
-            number_mutatuios -= 1
-        else:
-            # If not, revert the mutation
+        number_mutations = offspring.shape[1] 
+        while number_mutations > 0 and number_tries > 0:
+            gene_idx = np.random.randint(0, offspring.shape[1])
+            # Perform mutation
             offspring[idx, gene_idx] = 1 - offspring[idx, gene_idx]
-        #print("new_constraint_vector", new_constraint_vector)
-    print("offsprin", offspring)
+            
+            # Check if the mutated solution meets the constraints
+            new_constraint_vector = solution_is_valid(offspring[idx], get_sum=False, print_values=False, return_matrix=True)
+            
+            # Ensure the mutation respects the constraint vector
+            if np.all(new_constraint_vector[constraint_vector == 1] == 0):
+                number_tries -= 1
+            else:
+                # If not, revert the mutation
+                offspring[idx, gene_idx] = 1 - offspring[idx, gene_idx]
+                number_mutations -= 1
+    if(number_tries != 0):
+        print("Mutation failed",number_mutations," times",number_tries)
     return offspring
 
+def generate_valid_matrix(num_reviewers, num_papers, min_reviews_per_paper, max_reviews_per_paper, reviewer_capacity):
+    matrix = np.zeros((num_reviewers, num_papers), dtype=int)
+    
+    for paper in range(num_papers):
+        num_reviews = np.random.randint(min_reviews_per_paper, max_reviews_per_paper)
+        reviewers = []
+        
+        # Ensure that each paper gets the required number of reviews
+        while len(reviewers) < num_reviews:
+            potential_reviewer = np.random.choice(num_reviewers)
+            if np.sum(matrix[potential_reviewer, :]) < reviewer_capacity and potential_reviewer not in reviewers:
+                reviewers.append(potential_reviewer)
+            else:
+                for previous_paper in range(paper):
+                    if matrix[potential_reviewer, previous_paper] == 1:
+                        if np.sum(matrix[:, previous_paper]) > min_reviews_per_paper:
+                            matrix[potential_reviewer, paper] = 1
+                            matrix[potential_reviewer, previous_paper] = 0
+                            reviewers.append(potential_reviewer)
+                            break
+        
+        for reviewer in reviewers:
+            matrix[reviewer, paper] = 1
+        #print("done",paper)
+        #print(matrix)
+    return matrix
 
 def initial_population(num_reviewers, num_papers, population_size,num=5):
     best_population = None
@@ -172,7 +194,6 @@ def initial_population(num_reviewers, num_papers, population_size,num=5):
     print("Best count: ", best_count)
     return population
 
-
 with open('datasets/easy_dataset_1.json', 'r') as file:
     data = json.load(file)
 num_papers = data['num_papers']
@@ -182,23 +203,22 @@ min_reviews_per_paper = data['min_reviews_per_paper']
 max_reviews_per_paper = data['max_reviews_per_paper']
 #print(num_papers, num_reviewers, reviewer_capacity, min_reviews_per_paper, max_reviews_per_paper)
 
-num_generations = 100
-population_size = 50
-num_parents_mating = 10
+num_generations = 1000
+population_size = 500
+num_parents_mating = 5
 
 P = np.array(data['preferences'])
 F = np.array(data['friendships'])
 A = np.array(data['authorship'])
-print(P)
+#print(P)
 fitnes_penalty = {
-    "friends": 10,
-    "authorship": 30,
-    "min_reviews": 10,
-    "max_reviews": 3,
-    "reviewer_capacity": 25
+    "friends": 2,
+    "authorship": 8,
+    "min_reviews": 12,
+    "max_reviews": 12,
+    "reviewer_capacity": 9
 }
 initial_pop = initial_population(num_reviewers, num_papers, population_size)
-# print(initial_pop)
 
 # for i in range(population_size):
 #     rez = fitness_func(initial_pop[i])
@@ -217,22 +237,22 @@ ga_instance = pygad.GA(
     gene_type=int,
     gene_space=[0, 1],
     stop_criteria= "saturate_50",
-    parent_selection_type="tournament"
+    parent_selection_type="rank",
 )
 
 
 #ga_instance.plot_fitness()
-#ga_instance.run()
-#solution, solution_fitness, solution_idx = ga_instance.best_solution()
-#print("Best solution:", solution.reshape((num_reviewers, num_papers)))
-#print("Best solution fitness:", solution_fitness)
-
+ga_instance.run()
+solution, solution_fitness, solution_idx = ga_instance.best_solution()
+print("Best solution:", solution.reshape((num_reviewers, num_papers)))
+print("Best solution fitness:", solution_fitness)
+is_valid = solution_is_valid(solution, get_sum=True, print_values=True)
 # Generate a random solution
 #
-solution = initial_population(num_reviewers, num_papers, 1)
-print("solution", solution) 
+#solution = initial_population(num_reviewers, num_papers, 1)
+#print("solution", solution) 
 #print_solution(solution)
 #print("Solution is valid: ", solution_is_valid(solution,get_sum=True,print_values=True))
-mutated = custom_mutation(solution)
-print_solution(mutated)
+#mutated = custom_mutation(solution)
+#print_solution(mutated)
 #print(brute_force_find_valid_solution(5, 5))
