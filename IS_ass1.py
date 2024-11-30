@@ -108,20 +108,40 @@ def create_fitness_function(fitnes_penalty):
 
         return  preference_score - penalty
     return fitness_func
-
 def custom_crossover(parents, offspring_size, ga_instance):
-    offspring = np.zeros(offspring_size)
-    for k in range(offspring_size[0]):
-        parent1_idx = k % parents.shape[0]
-        parent2_idx = (k + 1) % parents.shape[0]
-        parent1 = parents[parent1_idx]
-        parent2 = parents[parent2_idx]
-        parent1 = parent1.flatten()
-        parent2 = parent2.flatten()
-        offspring[k] = parent1
-        crossover_point = np.random.randint(0, parent1.shape[0])
-        offspring[k, crossover_point:] = parent2[crossover_point:]
-    return offspring
+    offspring = []
+    idx = 0
+    number_tries = 7  # how many times to try to find a valid solution else skip
+
+    while len(offspring) < offspring_size[0]: 
+        number_tries = 5
+        while number_tries > 0:
+            parent1 = parents[idx % parents.shape[0], :].copy()
+            parent2 = parents[(idx + 1) % parents.shape[0], :].copy()
+
+            random_split_point = np.random.choice(range(offspring_size[1]))
+
+            # Perform one-point crossover
+            child = parent1.copy()
+            child[random_split_point:] = parent2[random_split_point:]
+
+            # Check if the offspring is valid
+            initial_vector_constrains_p1 = solution_is_valid(parent1, get_sum=False, print_values=False, return_matrix=True)
+            initial_vector_constrains_p2 = solution_is_valid(parent2, get_sum=False, print_values=False, return_matrix=True)
+            constraint_vector_p1 = np.array([1 if val == 0 else 0 for val in initial_vector_constrains_p1])
+            constraint_vector_p2 = np.array([1 if val == 0 else 0 for val in initial_vector_constrains_p2])
+            new_constraint_vector = solution_is_valid(child, get_sum=False, print_values=False, return_matrix=True)
+
+            if np.all(new_constraint_vector[constraint_vector_p1 == 1] == 0) or np.all(new_constraint_vector[constraint_vector_p2 == 1] == 0):
+                offspring.append(child)
+                break
+            else:
+                number_tries -= 1
+                if number_tries == 0:
+                    offspring.append(parent1)
+        idx += 1
+
+    return np.array(offspring)
 def custom_mutation(offspring, ga_instance):
     number_tries = 7
     check_valid = random.randint(0, 2) == 1
@@ -231,7 +251,7 @@ ga_instance = pygad.GA(
     sol_per_pop=population_size,
     num_genes=num_reviewers * num_papers,
     initial_population=initial_pop,
-    crossover_type="scattered",
+    crossover_type=custom_crossover,
     mutation_type=custom_mutation,
     mutation_percent_genes=5,
     gene_type=int,
